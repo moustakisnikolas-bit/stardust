@@ -36,3 +36,24 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   return data as T;
 }
+
+/** For multipart/form-data uploads - deliberately does not set Content-Type so the browser adds the correct multipart boundary. */
+export async function apiUpload<T>(
+  path: string,
+  formData: FormData,
+  options: { accessToken?: string | null } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (options.accessToken) {
+    headers.Authorization = `Bearer ${options.accessToken}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: formData });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new ApiError(response.status, data.error ?? "UNKNOWN_ERROR", data.message ?? "Request failed");
+  }
+
+  return data as T;
+}

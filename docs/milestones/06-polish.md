@@ -1,8 +1,8 @@
 # Phase 6 — Polish
 
-**Status:** 🚧 In progress. Refresh-token rotation and rate limiting done and
-verified; photo upload and push notifications not started (both need an
-external service - see below).
+**Status:** 🚧 In progress. Refresh-token rotation, rate limiting, profile
+editing, and photo upload (local-disk storage) done and verified. Push
+notifications not started (needs an external service - see below).
 
 ## Refresh-token rotation with reuse detection
 
@@ -58,13 +58,55 @@ Scripted, against the live API:
 `tsc --noEmit` clean for both `apps/api` and `apps/web`. All prior unit
 tests still pass.
 
+**Profile editing + photo upload**, browser-driven end-to-end: set display
+name/bio/gender/gender-preference, uploaded a photo, saved, reloaded the
+page and confirmed every field (including the photo) persisted correctly,
+then deleted the photo and confirmed it was gone. Zero console errors
+throughout.
+
+## Profile editing + photo upload
+
+Users previously had no UI to set `displayName`, `bio`, `gender`, or
+`genderPreference` anywhere - a real gap, since `genderPreference` is
+actually read by `candidatePoolService`'s deck filter and was silently a
+no-op for every user. New `/profile/edit` page (`PUT /api/users/me`) covers
+all four, plus a photo grid (up to 6 photos) wired to real upload/delete
+endpoints.
+
+Photo upload didn't actually need to wait on picking a cloud provider: a
+`PhotoStorage` interface (`modules/users/storage/`) with a `LocalDiskStorage`
+implementation - saves to `apps/api/uploads/photos/`, served via
+`express.static` - works out of the box for dev/MVP with zero external
+credentials, following the same provider-abstraction pattern as astrology
+providers and OAuth. Swapping in S3/Cloudinary later is a new class
+implementing the same interface plus an env-gated switch in
+`storageRegistry.ts`, no call-site changes.
+
+One cross-origin subtlety: helmet's default `Cross-Origin-Resource-Policy:
+same-origin` would silently block the web app (a different origin) from
+loading `<img src>` pointing at the API's `/uploads/photos/*` - explicitly
+set to `cross-origin` for just that path.
+
+**A real bug found and fixed along the way**: this profile edit page was
+the first place in `apps/web` to import a *runtime value* (not just a
+type) from `@stardust/shared-types` - every earlier page only ever imported
+types, which get erased before bundling. That exposed a latent module
+resolution conflict: `shared-types` ships raw `.ts` source with no build
+step, so whichever consumer's `tsc` type-checks it applies *that
+consumer's* `moduleResolution` setting to those files too. `apps/api`
+declared `NodeNext` (requires explicit `.js` extensions on relative
+imports) while `apps/web`'s webpack needs them extensionless - directly
+conflicting requirements on the same source files. Fixed by dropping the
+unnecessary `NodeNext` override from `apps/api/tsconfig.json` (it runs via
+`tsx`, which resolves either style at runtime regardless of the tsconfig
+setting - the override was only ever a type-checking constraint, not a
+real runtime requirement) and removing the `.js` suffixes from
+`shared-types`' own internal imports to match its declared `Bundler`
+resolution mode. Also added `transpilePackages: ["@stardust/shared-types"]`
+to `next.config.mjs` so webpack applies proper TS transforms to it.
+
 ## Not started (needs an external service, same pattern as OAuth/Phase 5)
 
-- **Photo upload**: needs an object storage provider (S3, Cloudinary,
-  etc.) - the `Photo` table already exists and `SwipeCard`/match cards
-  already render `photoUrls[0]` when present, so this is purely "add an
-  upload endpoint + storage config" once you pick a provider and I have
-  credentials.
 - **Push notifications**: needs Firebase Cloud Messaging (mobile) or Web
   Push credentials - groundwork (the `match:new`/`message:new` WS events
   already exist as the trigger points) but no push integration yet.

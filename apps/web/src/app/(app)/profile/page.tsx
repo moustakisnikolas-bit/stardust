@@ -56,6 +56,9 @@ export default function ProfilePage() {
             <p className="text-sm text-stardust-400">{user?.email}</p>
           </div>
           <div className="flex items-center gap-4">
+            <Link href="/profile/edit" className="text-sm text-stardust-400 underline hover:text-stardust-200">
+              Edit profile
+            </Link>
             <Link href="/swipe" className="text-sm text-stardust-400 underline hover:text-stardust-200">
               Discover
             </Link>

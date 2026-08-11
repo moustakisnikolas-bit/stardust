@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
+import { MulterError } from "multer";
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof ZodError) {
@@ -9,6 +10,11 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
 
   if (err instanceof HttpError) {
     res.status(err.status).json({ error: err.code, message: err.message });
+    return;
+  }
+
+  if (err instanceof MulterError) {
+    res.status(400).json({ error: "UPLOAD_ERROR", message: err.message });
     return;
   }
 

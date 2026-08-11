@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SynastryHighlight } from "./chart.js";
+import type { SynastryHighlight } from "./chart";
 
 export type SwipeDirection = "LIKE" | "PASS";
 

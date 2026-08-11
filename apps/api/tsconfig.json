@@ -1,8 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    // Inherits module/moduleResolution ("ESNext"/"Bundler") from the base
+    // config rather than NodeNext - tsx (which actually runs this code)
+    // resolves extensionless and .js-suffixed relative imports the same
+    // way regardless of this setting, so it's purely a type-checking
+    // concern. NodeNext previously forced tsc to require explicit .js
+    // extensions even on @stardust/shared-types' own internal imports
+    // (which ship raw source, so tsc applies the *consuming* project's
+    // moduleResolution to them) - directly conflicting with apps/web's
+    // Bundler-mode consumption of the same files, which wants no extension.
     "outDir": "dist",
     "rootDir": "src",
     "declaration": false

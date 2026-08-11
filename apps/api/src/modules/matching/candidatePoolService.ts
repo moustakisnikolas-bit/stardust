@@ -30,7 +30,7 @@ export async function getCandidateDeck(userId: string, opts: { cursor?: string |
       onboardingCompletedAt: { not: null },
       natalChart: { isNot: null },
       swipesReceived: { none: { swiperId: userId } },
-      ...(requester.genderPreference ? { gender: requester.genderPreference } : {}),
+      ...(requester.genderPreference && requester.genderPreference !== "any" ? { gender: requester.genderPreference } : {}),
     },
     orderBy: { id: "asc" },
     take: DECK_SCAN_BATCH,
