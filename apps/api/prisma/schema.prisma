@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  passwordHash           String
+  displayName            String?
+  bio                    String?
+  gender                 String?
+  genderPreference       String?
+  isActive               Boolean   @default(true)
+  onboardingCompletedAt  DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  birthData        BirthData?
+  natalChart       NatalChart?
+  photos           Photo[]
+
+  swipesMade       Swipe[]   @relation("SwipesMade")
+  swipesReceived   Swipe[]   @relation("SwipesReceived")
+
+  matchesAsA       Match[]   @relation("MatchUserA")
+  matchesAsB       Match[]   @relation("MatchUserB")
+
+  messagesSent     Message[]
+
+  compatAsA        CompatibilityScore[] @relation("CompatUserA")
+  compatAsB        CompatibilityScore[] @relation("CompatUserB")
+}
+
+model Photo {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url       String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model BirthData {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  birthDate             DateTime @db.Date
+  birthTime              String?  // "HH:mm" local time, null if unknown
+  timeUnknown            Boolean  @default(false)
+
+  birthLocationRaw       String
+  latitude               Float
+  longitude              Float
+  timezoneId             String   // IANA zone, e.g. "Europe/Athens"
+  utcOffsetMinutesAtBirth Int     // historical offset resolved for this exact instant
+
+  geocodeProvider         String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model NatalChart {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  providerId  String
+  computedAt  DateTime
+  raw         Json     // full provider output, preserved for audit/debug
+
+  // Denormalized placements for fast querying/UI - see @stardust/shared-types NatalChart
+  placements  Json
+  houses      Json
+
+  createdAt   DateTime @default(now())
+}
+
+/// Logs every astrology-provider comparison run, backing the multi-provider
+/// validation workflow (scripts/compare-providers.ts + debug endpoint).
+model AstrologyProviderRun {
+  id             String   @id @default(uuid())
+  providerId     String
+  requestPayload Json
+  responseChart  Json?
+  success        Boolean
+  errorMessage   String?
+  latencyMs      Int
+  createdAt      DateTime @default(now())
+
+  @@index([providerId, createdAt])
+}
+
+/// Cached pairwise synastry result - what the swipe deck reads from.
+model CompatibilityScore {
+  id              String   @id @default(uuid())
+  userAId         String
+  userBId         String
+  userA           User     @relation("CompatUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB           User     @relation("CompatUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  score           Int
+  aspects         Json
+  highlights      Json
+  synastryVersion Int
+
+  computedAt      DateTime @default(now())
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+}
+
+model Swipe {
+  id         String        @id @default(uuid())
+  swiperId   String
+  swiper     User          @relation("SwipesMade", fields: [swiperId], references: [id], onDelete: Cascade)
+  swipeeId   String
+  swipee     User          @relation("SwipesReceived", fields: [swipeeId], references: [id], onDelete: Cascade)
+  direction  SwipeDirection
+  createdAt  DateTime      @default(now())
+
+  @@unique([swiperId, swipeeId])
+  @@index([swipeeId])
+}
+
+enum SwipeDirection {
+  LIKE
+  PASS
+}
+
+model Match {
+  id          String    @id @default(uuid())
+  userAId     String
+  userA       User      @relation("MatchUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId     String
+  userB       User      @relation("MatchUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+  unmatchedAt DateTime?
+
+  messages    Message[]
+
+  @@unique([userAId, userBId])
+  @@index([userBId])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  matchId   String
+  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  @@index([matchId, createdAt])
+}

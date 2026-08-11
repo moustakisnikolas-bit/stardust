@@ -1,0 +1,40 @@
+{
+  "name": "@stardust/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "prisma": "prisma",
+    "compare-providers": "tsx scripts/compare-providers.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@stardust/astrology-core": "workspace:*",
+    "@stardust/shared-types": "workspace:*",
+    "argon2": "^0.41.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "geo-tz": "^8.1.1",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "luxon": "^3.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^22.0.0",
+    "prisma": "^5.20.0",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

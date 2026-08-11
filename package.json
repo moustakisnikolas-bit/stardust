@@ -1,0 +1,23 @@
+{
+  "name": "stardust",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "pnpm --filter @stardust/api prisma migrate dev",
+    "db:generate": "pnpm --filter @stardust/api prisma generate",
+    "db:studio": "pnpm --filter @stardust/api prisma studio",
+    "compare-providers": "pnpm --filter @stardust/api compare-providers"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  },
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
