@@ -11,6 +11,7 @@ import { onboardingRoutes } from "./modules/onboarding/onboardingRoutes.js";
 import { matchingRoutes } from "./modules/matching/matchingRoutes.js";
 import { chatRoutes } from "./modules/chat/chatRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
+import { apiLimiter } from "./middleware/rateLimit.js";
 import { registerSocketHandlers } from "./ws/socketHandlers.js";
 import type { TypedServer } from "./ws/types.js";
 
@@ -19,6 +20,7 @@ const app = express();
 app.use(helmet());
 app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
 app.use(express.json());
+app.use("/api", apiLimiter);
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 

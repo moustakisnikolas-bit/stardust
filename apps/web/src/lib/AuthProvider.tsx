@@ -86,9 +86,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    const stored = readStoredAuth();
     window.localStorage.removeItem(STORAGE_KEY);
     setAccessToken(null);
     setUser(null);
+    if (stored) {
+      // Best-effort server-side revocation - the client is already logged
+      // out locally regardless of whether this succeeds.
+      apiRequest("/api/auth/logout", { method: "POST", body: { refreshToken: stored.refreshToken } }).catch(() => {});
+    }
   }
 
   async function refreshUser() {

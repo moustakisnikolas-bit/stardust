@@ -37,6 +37,24 @@ model User {
 
   compatAsA        CompatibilityScore[] @relation("CompatUserA")
   compatAsB        CompatibilityScore[] @relation("CompatUserB")
+
+  refreshTokens    RefreshToken[]
+}
+
+/// Tracks issued refresh tokens for rotation + reuse detection: each
+/// /refresh call revokes the token it was given and issues a new one. If a
+/// revoked token is ever presented again (a sign it was stolen and the
+/// thief and legitimate user are racing), every token for that user is
+/// revoked, forcing a fresh login everywhere.
+model RefreshToken {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now())
+  revokedAt         DateTime?
+  replacedByTokenId String?
+
+  @@index([userId])
 }
 
 model Photo {

@@ -1,6 +1,6 @@
 import type { AuthTokens } from "@stardust/shared-types";
 import { prisma } from "../../../lib/prisma.js";
-import { issueTokens } from "../jwt.js";
+import { issueSession } from "../sessionService.js";
 import type { OAuthProfile, OAuthProvider } from "./OAuthProvider.js";
 
 const PROVIDER_ID_FIELD = { google: "googleId", facebook: "facebookId" } as const;
@@ -24,5 +24,5 @@ export async function loginOrCreateOAuthUser(providerName: OAuthProvider["id"], 
         });
   }
 
-  return issueTokens(user.id);
+  return issueSession(user.id);
 }

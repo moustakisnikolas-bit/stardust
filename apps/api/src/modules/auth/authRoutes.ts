@@ -4,9 +4,11 @@ import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { HttpError } from "../../middleware/errorHandler.js";
 import { authGuard } from "../../middleware/authGuard.js";
+import { authLimiter } from "../../middleware/rateLimit.js";
 import { env } from "../../config/env.js";
 import { hashPassword, verifyPassword } from "./passwordHash.js";
-import { issueTokens, verifyRefreshToken } from "./jwt.js";
+import { verifyRefreshToken } from "./jwt.js";
+import { issueSession, revokeSession, rotateSession } from "./sessionService.js";
 import { getOAuthProvider } from "./oauth/oauthRegistry.js";
 import { signOAuthState, verifyOAuthState } from "./oauth/oauthState.js";
 import { loginOrCreateOAuthUser } from "./oauth/oauthService.js";
@@ -29,6 +31,7 @@ function toPublicUser(user: {
 
 authRoutes.post(
   "/signup",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = signupSchema.parse(req.body);
 
@@ -40,13 +43,14 @@ authRoutes.post(
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({ data: { email, passwordHash } });
 
-    const tokens = issueTokens(user.id);
+    const tokens = await issueSession(user.id);
     res.status(201).json({ user: toPublicUser(user), tokens });
   }),
 );
 
 authRoutes.post(
   "/login",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const { email, password } = loginSchema.parse(req.body);
 
@@ -61,32 +65,50 @@ authRoutes.post(
       throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
     }
 
-    const tokens = issueTokens(user.id);
+    const tokens = await issueSession(user.id);
     res.json({ user: toPublicUser(user), tokens });
   }),
 );
 
 authRoutes.post(
   "/refresh",
+  authLimiter,
   asyncHandler(async (req, res) => {
     const refreshToken = req.body?.refreshToken;
     if (typeof refreshToken !== "string") {
       throw new HttpError(400, "VALIDATION_ERROR", "refreshToken is required");
     }
 
-    let userId: string;
+    let payload: { sub: string; jti: string };
     try {
-      userId = verifyRefreshToken(refreshToken).sub;
+      payload = verifyRefreshToken(refreshToken);
     } catch {
       throw new HttpError(401, "INVALID_REFRESH_TOKEN", "Refresh token is invalid or expired");
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
     if (!user) {
       throw new HttpError(401, "INVALID_REFRESH_TOKEN", "User no longer exists");
     }
 
-    res.json({ tokens: issueTokens(user.id) });
+    const tokens = await rotateSession(payload.sub, payload.jti);
+    res.json({ tokens });
+  }),
+);
+
+authRoutes.post(
+  "/logout",
+  asyncHandler(async (req, res) => {
+    const refreshToken = req.body?.refreshToken;
+    if (typeof refreshToken === "string") {
+      try {
+        const { jti } = verifyRefreshToken(refreshToken);
+        await revokeSession(jti);
+      } catch {
+        // Already invalid/expired - nothing to revoke, logout still succeeds.
+      }
+    }
+    res.status(204).send();
   }),
 );
 
