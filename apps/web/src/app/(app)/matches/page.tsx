@@ -61,29 +61,31 @@ export default function MatchesPage() {
           {matches?.map((match) => {
             const photo = match.otherUser.photoUrls[0];
             return (
-              <li
-                key={match.matchId}
-                className="flex items-center gap-4 rounded-2xl border border-stardust-600/40 bg-stardust-900/60 p-4"
-              >
-                <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-stardust-800 to-stardust-600">
-                  {photo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photo} alt={match.otherUser.displayName ?? "Match"} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center font-semibold text-stardust-200">
-                      {initials(match.otherUser.displayName)}
-                    </div>
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <h2 className="truncate font-medium text-stardust-100">{match.otherUser.displayName ?? "Someone"}</h2>
-                    <CompatibilityBadge score={match.compatibilityScore} />
+              <li key={match.matchId}>
+                <Link
+                  href={`/matches/${match.matchId}`}
+                  className="flex items-center gap-4 rounded-2xl border border-stardust-600/40 bg-stardust-900/60 p-4 transition hover:border-stardust-400/60"
+                >
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-stardust-800 to-stardust-600">
+                    {photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={photo} alt={match.otherUser.displayName ?? "Match"} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center font-semibold text-stardust-200">
+                        {initials(match.otherUser.displayName)}
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-1 truncate text-sm text-stardust-400">{match.lastMessagePreview ?? "Say hello!"}</p>
-                  <p className="mt-1 text-xs text-stardust-400">Matched {new Date(match.createdAt).toLocaleDateString()}</p>
-                </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <h2 className="truncate font-medium text-stardust-100">{match.otherUser.displayName ?? "Someone"}</h2>
+                      <CompatibilityBadge score={match.compatibilityScore} />
+                    </div>
+                    <p className="mt-1 truncate text-sm text-stardust-400">{match.lastMessagePreview ?? "Say hello!"}</p>
+                    <p className="mt-1 text-xs text-stardust-400">Matched {new Date(match.createdAt).toLocaleDateString()}</p>
+                  </div>
+                </Link>
               </li>
             );
           })}

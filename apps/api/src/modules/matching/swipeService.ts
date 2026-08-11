@@ -2,6 +2,8 @@ import type { SwipeDirection, SwipeResult } from "@stardust/shared-types";
 import { prisma } from "../../lib/prisma.js";
 import { HttpError } from "../../middleware/errorHandler.js";
 import { orderPair } from "./pairOrdering.js";
+import { getIo } from "../../ws/ioRegistry.js";
+import { userRoom } from "../../ws/rooms.js";
 
 export async function recordSwipe(swiperId: string, swipeeId: string, direction: SwipeDirection): Promise<SwipeResult> {
   if (swiperId === swipeeId) {
@@ -16,7 +18,7 @@ export async function recordSwipe(swiperId: string, swipeeId: string, direction:
   const { userAId, userBId } = orderPair(swiperId, swipeeId);
   const pairKey = `${userAId}:${userBId}`;
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     // Transaction-scoped advisory lock keyed on the canonical pair: if both
     // users' swipe requests land near-simultaneously, the second blocks here
     // until the first commits, then sees its already-committed swipe row.
@@ -50,4 +52,15 @@ export async function recordSwipe(swiperId: string, swipeeId: string, direction:
 
     return { matched: true, matchId: match.id };
   });
+
+  // Best-effort real-time notification, emitted only after the transaction
+  // has committed so a client is never told about a match that could still
+  // have rolled back.
+  if (result.matched && result.matchId) {
+    const io = getIo();
+    io?.to(userRoom(swiperId)).emit("match:new", { matchId: result.matchId, otherUserId: swipeeId });
+    io?.to(userRoom(swipeeId)).emit("match:new", { matchId: result.matchId, otherUserId: swiperId });
+  }
+
+  return result;
 }
