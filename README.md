@@ -55,12 +55,15 @@ docs/
 3. **Configure environment variables**
 
    Copy `.env.example` to `apps/api/.env` and `apps/web/.env.local` (the
-   latter only needs `NEXT_PUBLIC_API_URL`) and fill in the values. Every
-   var is documented inline in `.env.example`. At minimum for local dev you
+   latter only needs `NEXT_PUBLIC_API_URL` and, if you want push
+   notifications, `NEXT_PUBLIC_VAPID_PUBLIC_KEY` - same value as
+   `VAPID_PUBLIC_KEY` in `apps/api/.env`) and fill in the values. Every var
+   is documented inline in `.env.example`. At minimum for local dev you
    need `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` - the
    Google/Facebook OAuth and geocoding vars are optional (see
    `docs/milestones/04-oauth.md` for how to obtain them if you want social
-   login working).
+   login working); VAPID keys for push notifications are self-generated,
+   no external account needed (see `.env.example`).
 
 4. **Run database migrations**
    ```

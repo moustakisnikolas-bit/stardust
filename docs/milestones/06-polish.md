@@ -1,8 +1,9 @@
 # Phase 6 — Polish
 
 **Status:** 🚧 In progress. Refresh-token rotation, rate limiting, profile
-editing, and photo upload (local-disk storage) done and verified. Push
-notifications not started (needs an external service - see below).
+editing, photo upload, and web push notifications built and verified as far
+as this environment allows (see the push notifications section for the one
+piece that needs testing in a real Chrome install).
 
 ## Refresh-token rotation with reuse detection
 
@@ -105,8 +106,44 @@ real runtime requirement) and removing the `.js` suffixes from
 resolution mode. Also added `transpilePackages: ["@stardust/shared-types"]`
 to `next.config.mjs` so webpack applies proper TS transforms to it.
 
-## Not started (needs an external service, same pattern as OAuth/Phase 5)
+## Web push notifications
 
-- **Push notifications**: needs Firebase Cloud Messaging (mobile) or Web
-  Push credentials - groundwork (the `match:new`/`message:new` WS events
-  already exist as the trigger points) but no push integration yet.
+Corrected an earlier assumption: unlike OAuth or the astrology providers,
+this genuinely does **not** need an external account/service. Web Push is a
+browser standard - a VAPID keypair (public/private, generated locally with
+the `web-push` package, no registration anywhere) is enough to send
+notifications through the browser vendor's push infrastructure.
+
+- `PushSubscription` table (userId, endpoint, p256dh, auth keys) - one row
+  per device/browser a user has granted permission on.
+- `POST` / `DELETE /api/users/me/push-subscription` to save/remove a
+  subscription.
+- `pushService.sendPushToUser(userId, payload)` - best-effort (never
+  throws into the caller), auto-cleans up subscriptions the browser has
+  expired (404/410 responses), and silently no-ops entirely if VAPID keys
+  aren't configured - same graceful-degradation pattern as every other
+  optional integration in this app.
+- Wired into the two places that matter: `swipeService` (on match) and
+  `socketHandlers`' `message:send` (to the *other* participant, not the
+  sender) - both calls are fire-and-forget so a push failure can never
+  block the actual match/message from succeeding.
+- Frontend: `apps/web/public/sw.js` (service worker - shows the
+  notification, focuses/opens the app on click), `lib/push.ts`
+  (subscribe/unsubscribe, VAPID key conversion), and a `NotificationToggle`
+  component on `/profile/edit`.
+
+**Verification, and its real boundary**: browser-driven end-to-end testing
+got as far as the service worker registering and the permission prompt
+being granted correctly, then hit a wall specific to this environment -
+Playwright's bundled Chromium build doesn't ship the official Google API
+key that Chrome needs to authenticate with its real push service, so
+`pushManager.subscribe()` fails with "push service not available" here.
+This is a property of the test browser binary, not the application code -
+confirmed by testing the parts that *are* verifiable in this environment:
+the UI flow up to that point works, and a full match-creation +
+live-message-delivery regression script confirmed the fire-and-forget push
+calls never block or break those flows (both still succeeded end-to-end
+with real Socket.IO connections). **The subscribe → receive round-trip
+itself still needs a real Chrome/Edge/Firefox install to confirm** - it
+should work (the client/server code matches the standard Web Push spec
+exactly), but "should" isn't "verified" for that one piece.

@@ -4,6 +4,7 @@ import { HttpError } from "../../middleware/errorHandler.js";
 import { orderPair } from "./pairOrdering.js";
 import { getIo } from "../../ws/ioRegistry.js";
 import { userRoom } from "../../ws/rooms.js";
+import { sendPushToUser } from "../push/pushService.js";
 
 export async function recordSwipe(swiperId: string, swipeeId: string, direction: SwipeDirection): Promise<SwipeResult> {
   if (swiperId === swipeeId) {
@@ -60,6 +61,10 @@ export async function recordSwipe(swiperId: string, swipeeId: string, direction:
     const io = getIo();
     io?.to(userRoom(swiperId)).emit("match:new", { matchId: result.matchId, otherUserId: swipeeId });
     io?.to(userRoom(swipeeId)).emit("match:new", { matchId: result.matchId, otherUserId: swiperId });
+
+    const pushPayload = { title: "New match! ✨", body: "You've matched with someone new", url: "/matches" };
+    sendPushToUser(swiperId, pushPayload).catch(() => {});
+    sendPushToUser(swipeeId, pushPayload).catch(() => {});
   }
 
   return result;

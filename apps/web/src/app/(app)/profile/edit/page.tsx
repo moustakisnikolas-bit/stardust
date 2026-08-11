@@ -11,6 +11,7 @@ import {
 import { useAuth } from "@/lib/AuthProvider";
 import { useRequireAuth } from "@/lib/useRequireAuth";
 import { apiRequest, apiUpload, ApiError } from "@/lib/apiClient";
+import { NotificationToggle } from "@/components/settings/NotificationToggle";
 
 const GENDER_LABELS: Record<string, string> = { woman: "Woman", man: "Man", nonbinary: "Non-binary", any: "Anyone" };
 
@@ -144,6 +145,8 @@ export default function EditProfilePage() {
             onChange={handlePhotoSelected}
           />
         </section>
+
+        <NotificationToggle accessToken={accessToken} />
 
         <form onSubmit={handleSave} className="space-y-4 rounded-2xl border border-stardust-600/40 bg-stardust-900/60 p-6">
           <div>

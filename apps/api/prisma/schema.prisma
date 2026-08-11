@@ -39,6 +39,22 @@ model User {
   compatAsB        CompatibilityScore[] @relation("CompatUserB")
 
   refreshTokens    RefreshToken[]
+  pushSubscriptions PushSubscription[]
+}
+
+/// A browser's Web Push subscription (one per device/browser a user has
+/// granted notification permission on). endpoint is the push service URL
+/// assigned by the browser vendor - unique per subscription.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Tracks issued refresh tokens for rotation + reuse detection: each

@@ -1,10 +1,11 @@
 import { Router } from "express";
 import multer from "multer";
-import { profileUpdateSchema } from "@stardust/shared-types";
+import { profileUpdateSchema, pushSubscriptionSchema, pushUnsubscribeSchema } from "@stardust/shared-types";
 import { authGuard } from "../../middleware/authGuard.js";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { HttpError } from "../../middleware/errorHandler.js";
 import { addPhoto, deletePhoto, getMyProfile, updateProfile } from "./userService.js";
+import { removeSubscription, saveSubscription } from "../push/pushService.js";
 
 export const userRoutes = Router();
 
@@ -53,6 +54,24 @@ userRoutes.delete(
   "/me/photos/:photoId",
   asyncHandler(async (req, res) => {
     await deletePhoto(req.userId!, req.params.photoId);
+    res.status(204).send();
+  }),
+);
+
+userRoutes.post(
+  "/me/push-subscription",
+  asyncHandler(async (req, res) => {
+    const input = pushSubscriptionSchema.parse(req.body);
+    await saveSubscription(req.userId!, input);
+    res.status(204).send();
+  }),
+);
+
+userRoutes.delete(
+  "/me/push-subscription",
+  asyncHandler(async (req, res) => {
+    const { endpoint } = pushUnsubscribeSchema.parse(req.body);
+    await removeSubscription(endpoint);
     res.status(204).send();
   }),
 );

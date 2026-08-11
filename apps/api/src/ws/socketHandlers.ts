@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { HttpError } from "../middleware/errorHandler.js";
 import { createMessage, getMatchForParticipant, markMessagesRead } from "../modules/chat/chatService.js";
+import { sendPushToUser } from "../modules/push/pushService.js";
 import { socketAuth } from "./socketAuth.js";
 import { setIo } from "./ioRegistry.js";
 import { matchRoom, userRoom } from "./rooms.js";
@@ -37,9 +38,14 @@ export function registerSocketHandlers(io: TypedServer): void {
         const { matchId, body } = sendSchema.parse(payload);
         // Re-authorize on every send - a prior join doesn't guarantee the
         // match is still active (it could have been unmatched meanwhile).
-        await getMatchForParticipant(matchId, userId);
+        const match = await getMatchForParticipant(matchId, userId);
         const message = await createMessage(matchId, userId, body);
         io.to(matchRoom(matchId)).emit("message:new", message);
+
+        const otherUserId = match.userAId === userId ? match.userBId : match.userAId;
+        sendPushToUser(otherUserId, { title: "New message", body: body.slice(0, 120), url: `/matches/${matchId}` }).catch(
+          () => {},
+        );
       } catch (err) {
         emitError(socket, err);
       }
