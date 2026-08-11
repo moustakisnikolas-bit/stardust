@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { NatalChart } from "@stardust/shared-types";
 import { useAuth } from "@/lib/AuthProvider";
 import { useRequireAuth } from "@/lib/useRequireAuth";
@@ -54,9 +55,17 @@ export default function ProfilePage() {
             <h1 className="text-2xl font-semibold text-stardust-200">Your natal chart</h1>
             <p className="text-sm text-stardust-400">{user?.email}</p>
           </div>
-          <button onClick={logout} className="text-sm text-stardust-400 underline hover:text-stardust-200">
-            Log out
-          </button>
+          <div className="flex items-center gap-4">
+            <Link href="/swipe" className="text-sm text-stardust-400 underline hover:text-stardust-200">
+              Discover
+            </Link>
+            <Link href="/matches" className="text-sm text-stardust-400 underline hover:text-stardust-200">
+              Matches
+            </Link>
+            <button onClick={logout} className="text-sm text-stardust-400 underline hover:text-stardust-200">
+              Log out
+            </button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-red-400">{error}</p>}

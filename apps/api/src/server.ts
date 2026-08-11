@@ -6,6 +6,7 @@ import helmet from "helmet";
 import { env } from "./config/env.js";
 import { authRoutes } from "./modules/auth/authRoutes.js";
 import { onboardingRoutes } from "./modules/onboarding/onboardingRoutes.js";
+import { matchingRoutes } from "./modules/matching/matchingRoutes.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -18,6 +19,7 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/onboarding", onboardingRoutes);
+app.use("/api/matching", matchingRoutes);
 
 app.use(errorHandler);
 
