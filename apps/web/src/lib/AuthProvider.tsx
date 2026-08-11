@@ -19,6 +19,8 @@ interface AuthContextValue {
   signup: (email: string, password: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  /** Hydrates the session from tokens obtained outside the normal login/signup flow (OAuth redirect callback). */
+  completeOAuth: (tokens: StoredAuth) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -94,8 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadMe(accessToken);
   }
 
+  async function completeOAuth(tokens: StoredAuth) {
+    persist(tokens);
+    await loadMe(tokens.accessToken);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, accessToken, loading, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, accessToken, loading, login, signup, logout, refreshUser, completeOAuth }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,8 +4,12 @@ import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../lib/asyncHandler.js";
 import { HttpError } from "../../middleware/errorHandler.js";
 import { authGuard } from "../../middleware/authGuard.js";
+import { env } from "../../config/env.js";
 import { hashPassword, verifyPassword } from "./passwordHash.js";
 import { issueTokens, verifyRefreshToken } from "./jwt.js";
+import { getOAuthProvider } from "./oauth/oauthRegistry.js";
+import { signOAuthState, verifyOAuthState } from "./oauth/oauthState.js";
+import { loginOrCreateOAuthUser } from "./oauth/oauthService.js";
 
 export const authRoutes = Router();
 
@@ -47,7 +51,13 @@ authRoutes.post(
     const { email, password } = loginSchema.parse(req.body);
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await verifyPassword(user.passwordHash, password))) {
+    if (!user) {
+      throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
+    }
+    if (!user.passwordHash) {
+      throw new HttpError(400, "OAUTH_ACCOUNT", "This account uses Google or Facebook sign-in - use that button instead");
+    }
+    if (!(await verifyPassword(user.passwordHash, password))) {
       throw new HttpError(401, "INVALID_CREDENTIALS", "Email or password is incorrect");
     }
 
@@ -89,5 +99,59 @@ authRoutes.get(
       throw new HttpError(404, "NOT_FOUND", "User not found");
     }
     res.json({ user: toPublicUser(user) });
+  }),
+);
+
+// --- OAuth (Google / Facebook) ---
+// Full-page redirect flow, not a fetch-based API: the frontend links directly
+// to /oauth/:provider, we redirect to the provider, then redirect back to
+// WEB_ORIGIN/oauth/callback with tokens in the URL fragment (never sent to a
+// server, unlike a query string) for the SPA to pick up.
+
+authRoutes.get("/oauth/:provider", (req, res) => {
+  const provider = getOAuthProvider(req.params.provider);
+  if (!provider) {
+    res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_unavailable`);
+    return;
+  }
+  res.redirect(provider.getAuthorizationUrl(signOAuthState()));
+});
+
+authRoutes.get(
+  "/oauth/:provider/callback",
+  asyncHandler(async (req, res) => {
+    const provider = getOAuthProvider(req.params.provider);
+    if (!provider) {
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_unavailable`);
+      return;
+    }
+
+    if (req.query.error) {
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_denied`);
+      return;
+    }
+
+    const { code, state } = req.query;
+    if (typeof code !== "string" || typeof state !== "string") {
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_invalid_request`);
+      return;
+    }
+
+    try {
+      verifyOAuthState(state);
+    } catch {
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_invalid_state`);
+      return;
+    }
+
+    try {
+      const profile = await provider.exchangeCodeForProfile(code);
+      const tokens = await loginOrCreateOAuthUser(provider.id, profile);
+      const fragment = `accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`;
+      res.redirect(`${env.WEB_ORIGIN}/oauth/callback#${fragment}`);
+    } catch (err) {
+      console.error("OAuth callback failed:", err);
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_failed`);
+    }
   }),
 );

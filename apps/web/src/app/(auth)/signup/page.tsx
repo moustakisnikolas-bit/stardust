@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { ApiError } from "@/lib/apiClient";
+import { OAuthButtons } from "@/components/auth/OAuthButtons";
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -73,6 +74,14 @@ export default function SignupPage() {
             {submitting ? "Creating account..." : "Sign up"}
           </button>
         </form>
+
+        <div className="my-6 flex items-center gap-3 text-xs text-stardust-400">
+          <div className="h-px flex-1 bg-stardust-600/40" />
+          or
+          <div className="h-px flex-1 bg-stardust-600/40" />
+        </div>
+
+        <OAuthButtons />
 
         <p className="mt-6 text-center text-sm text-stardust-400">
           Already have an account?{" "}

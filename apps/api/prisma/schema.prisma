@@ -10,7 +10,10 @@ datasource db {
 model User {
   id                     String    @id @default(uuid())
   email                  String    @unique
-  passwordHash           String
+  /// Null for accounts created via OAuth only (no password set).
+  passwordHash           String?
+  googleId               String?   @unique
+  facebookId             String?   @unique
   displayName            String?
   bio                    String?
   gender                 String?

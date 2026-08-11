@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/AuthProvider";
 import { ApiError } from "@/lib/apiClient";
+import { OAuthButtons, describeOAuthError } from "@/components/auth/OAuthButtons";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -13,6 +14,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthError = describeOAuthError(params.get("error"));
+    if (oauthError) setError(oauthError);
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -72,6 +79,14 @@ export default function LoginPage() {
             {submitting ? "Logging in..." : "Log in"}
           </button>
         </form>
+
+        <div className="my-6 flex items-center gap-3 text-xs text-stardust-400">
+          <div className="h-px flex-1 bg-stardust-600/40" />
+          or
+          <div className="h-px flex-1 bg-stardust-600/40" />
+        </div>
+
+        <OAuthButtons />
 
         <p className="mt-6 text-center text-sm text-stardust-400">
           New to Stardust?{" "}
