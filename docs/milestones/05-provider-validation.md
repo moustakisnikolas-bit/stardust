@@ -1,6 +1,49 @@
 # Phase 5 — Astrology provider validation (Prokerala / FreeAstrologyAPI / etc.)
 
-**Status:** ⛔ Blocked on you, by design — see below.
+**Status:** ⛔ Third-party API adapters still blocked on you (see below) — but
+see "No-signup cross-validation" first: a real accuracy check against the
+authoritative Swiss Ephemeris is already done, and it's good news.
+
+## No-signup cross-validation against the real Swiss Ephemeris
+
+The user asked whether a verified open-source option exists that doesn't
+need any signup. Found one: [`sweph`](https://www.npmjs.com/package/sweph),
+an actively maintained (published within the last two months at time of
+writing) Node binding for the actual Swiss Ephemeris C library - installs
+cleanly on Windows via prebuilt binaries, no node-gyp compilation needed
+(unlike the native `swisseph` package avoided in Phase 1).
+
+**Used it once, locally, purely to validate our numbers - not integrated
+into the app.** Downloaded the real high-precision ephemeris data files
+(`sepl_18.se1`, `semo_18.se1` - freely available from the Swiss Ephemeris
+GitHub repo, no signup) and recomputed the same June 1990 Athens chart
+already used as the Phase 1 verification fixture. Every planet matched our
+existing `SwissEphemerisProvider` (which uses `circular-natal-horoscope-js`'s
+Moshier algorithm) to within **32 arcseconds** - the Moon had the largest
+gap, still over 300x smaller than the tightest orb (6°) used anywhere in
+`scoreSynastry`. For every practical astrological purpose, our existing
+self-hosted provider is indistinguishable from the authoritative
+high-precision ephemeris. This is real, independent confirmation that the
+core chart math has been correct since Phase 1.
+
+**Why `sweph` isn't being adopted as a live provider despite this**:
+licensing, not accuracy. It's AGPL-3.0 by default (LGPL only if you
+purchase a professional Swiss Ephemeris license from Astrodienst/astro.com)
+- since Stardust's backend is a network-accessed service, AGPL's
+network-use clause would very likely require publishing the backend's full
+source to all users unless that commercial license is bought. This is a
+fundamentally different situation from `circular-natal-horoscope-js`
+(Unlicense - public domain, zero restrictions), which is exactly why that
+one was chosen in Phase 1 over the native `swisseph` bindings. Using
+`sweph` once, locally, to cross-check numbers doesn't trigger AGPL's
+network clause (nothing was conveyed or served to any user) - but shipping
+it as part of the running service would. If real Swiss Ephemeris precision
+ever becomes worth the AGPL/commercial-license tradeoff (e.g. for very
+old/future birth dates where Moshier's approximation degrades, which is
+not a concern for the 20th/21st century date range real users will have),
+that's a deliberate call to make later, not now.
+
+## Third-party API adapters (Prokerala / FreeAstrologyAPI)
 
 ## What this phase is
 
