@@ -1,22 +1,18 @@
-import type { OAuthProfile, OAuthProvider } from "./OAuthProvider.js";
+import * as client from "openid-client";
+import type { OAuthCallbackContext, OAuthProfile, OAuthProvider } from "./OAuthProvider.js";
 
-const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo";
-
-interface GoogleTokenResponse {
-  access_token: string;
-}
-
-interface GoogleUserInfo {
-  sub: string;
-  email: string;
-  email_verified: boolean;
-  name?: string;
-}
-
+/**
+ * Backed by `openid-client` (OpenID Foundation certified, actively
+ * maintained by panva) rather than hand-rolled fetch calls to Google's
+ * token/userinfo endpoints. This also gets us real ID-token verification
+ * (signature, issuer, audience) instead of just trusting the userinfo
+ * endpoint over TLS, which the previous hand-rolled version did.
+ */
 export class GoogleOAuthProvider implements OAuthProvider {
   readonly id = "google" as const;
+  readonly usesPKCE = true;
+
+  private configPromise: Promise<client.Configuration> | null = null;
 
   constructor(
     private readonly clientId: string,
@@ -24,45 +20,53 @@ export class GoogleOAuthProvider implements OAuthProvider {
     private readonly redirectUri: string,
   ) {}
 
-  getAuthorizationUrl(state: string): string {
-    const url = new URL(AUTH_URL);
-    url.searchParams.set("client_id", this.clientId);
-    url.searchParams.set("redirect_uri", this.redirectUri);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "openid email profile");
-    url.searchParams.set("state", state);
-    url.searchParams.set("prompt", "select_account");
-    return url.toString();
+  private getConfig(): Promise<client.Configuration> {
+    // Discovery hits Google's /.well-known/openid-configuration over the
+    // network - memoized so it only happens once per process, not per request.
+    if (!this.configPromise) {
+      this.configPromise = client.discovery(
+        new URL("https://accounts.google.com"),
+        this.clientId,
+        undefined,
+        client.ClientSecretPost(this.clientSecret),
+      );
+    }
+    return this.configPromise;
   }
 
-  async exchangeCodeForProfile(code: string): Promise<OAuthProfile> {
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        grant_type: "authorization_code",
-        redirect_uri: this.redirectUri,
-      }),
+  async getAuthorizationUrl({ state, codeChallenge }: { state: string; codeChallenge?: string }): Promise<string> {
+    if (!codeChallenge) {
+      throw new Error("GoogleOAuthProvider requires a PKCE code challenge");
+    }
+    const config = await this.getConfig();
+    const url = client.buildAuthorizationUrl(config, {
+      redirect_uri: this.redirectUri,
+      scope: "openid email profile",
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
     });
-    if (!tokenRes.ok) {
-      throw new Error(`Google token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
-    }
-    const { access_token: accessToken } = (await tokenRes.json()) as GoogleTokenResponse;
+    return url.href;
+  }
 
-    const profileRes = await fetch(USERINFO_URL, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!profileRes.ok) {
-      throw new Error(`Google userinfo request failed: ${profileRes.status}`);
+  async exchangeCodeForProfile({ callbackUrl, codeVerifier, state }: OAuthCallbackContext): Promise<OAuthProfile> {
+    const config = await this.getConfig();
+    const tokens = await client.authorizationCodeGrant(config, callbackUrl, {
+      pkceCodeVerifier: codeVerifier,
+      expectedState: state,
+    });
+
+    const claims = tokens.claims();
+    const email = claims?.email;
+    if (!claims || typeof email !== "string") {
+      throw new Error("Google did not return an email claim");
     }
-    const profile = (await profileRes.json()) as GoogleUserInfo;
 
     return {
-      providerId: profile.sub,
-      email: profile.email,
-      emailVerified: profile.email_verified,
-      name: profile.name ?? null,
+      providerId: String(claims.sub),
+      email,
+      emailVerified: claims.email_verified === true,
+      name: typeof claims.name === "string" ? claims.name : null,
     };
   }
 }

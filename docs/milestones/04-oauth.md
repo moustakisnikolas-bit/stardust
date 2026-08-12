@@ -35,6 +35,46 @@ account or link to an existing email/password account with the same email.
   provider's button redirects to `/login?error=oauth_unavailable` instead of
   crashing the server or 500ing.
 
+## Library choice: `openid-client` for Google, hand-rolled for Facebook
+
+Google's exchange originally used hand-written `fetch()` calls to Google's
+token/userinfo endpoints (`apps/api/src/modules/auth/oauth/GoogleOAuthProvider.ts`).
+Swapped to [`openid-client`](https://github.com/panva/openid-client) (by
+Filip Skokan, who also maintains `jose`) after the user asked specifically
+for a trustworthy open-source library there instead of custom code -
+reasonable, since hand-rolled OAuth/token-exchange code is exactly the kind
+of thing that benefits from a widely-vetted library.
+
+**Why `openid-client` and not Arctic** (the obvious modern alternative):
+Arctic was confirmed **deprecated as of July 2026** (`npm view arctic
+deprecated` returns a "no longer supported" notice) at the time of this
+decision - disqualified outright. `openid-client` is OpenID Foundation
+certified (Basic, FAPI 1.0, FAPI 2.0 Relying Party conformance profiles)
+and was published to npm the day before this decision was made - about as
+actively maintained as a library gets. It's also a genuine security
+improvement, not just a refactor: it verifies the ID token's signature,
+issuer, and audience via Google's published JWKS, where the old hand-rolled
+version only trusted the userinfo endpoint's response over plain TLS.
+
+**Facebook stays hand-rolled, deliberately.** Facebook's OAuth2
+implementation isn't OIDC-compliant (no discovery document), so
+`openid-client` doesn't fit it. `passport-facebook`, the obvious
+alternative, hasn't published since April 2023 - switching to it would be
+a downgrade from the current simple, working, low-risk implementation, not
+an improvement.
+
+This did require widening the `OAuthProvider` interface
+(`OAuthProvider.ts`) to carry a PKCE `code_verifier`/`code_challenge`
+through the flow (`openid-client` requires PKCE for the authorization code
+grant) and the full callback URL (its `authorizationCodeGrant()` takes the
+whole `URL`, not just the `code` string, and validates `state` itself).
+Since this app deliberately has no server-side session storage, the PKCE
+verifier rides inside the same short-lived signed `state` JWT that already
+existed for CSRF protection (`oauthState.ts`) - no new storage, no
+architecture change, just a slightly larger token payload. Facebook's
+provider implements the same widened interface but ignores the PKCE
+fields entirely (`usesPKCE = false`).
+
 ## What you need to do to activate this
 
 ### Google
@@ -99,3 +139,13 @@ app credentials. Once you add them, the fastest check is: click "Continue
 with Google" on `/login`, complete the consent screen, and confirm you land
 on `/onboarding/birth-data` (new account) or `/profile` (if the email
 already existed) with a valid session.
+
+### Post-library-swap re-verification
+
+Re-ran the same "not configured" checks after switching Google to
+`openid-client` (`tsc --noEmit` clean, server starts with zero OAuth env
+vars set, both providers' unconfigured redirects unchanged, email/password
+signup/login regression-checked live) - all still pass. `openid-client`'s
+discovery call is lazy and memoized, so it never runs at all - not even
+once at startup - unless `GOOGLE_CLIENT_ID`/`SECRET` are actually set and
+someone clicks the button.

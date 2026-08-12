@@ -1,4 +1,5 @@
 import { Router } from "express";
+import * as openidClient from "openid-client";
 import { loginSchema, signupSchema, type PublicUser } from "@stardust/shared-types";
 import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../lib/asyncHandler.js";
@@ -130,14 +131,27 @@ authRoutes.get(
 // WEB_ORIGIN/oauth/callback with tokens in the URL fragment (never sent to a
 // server, unlike a query string) for the SPA to pick up.
 
-authRoutes.get("/oauth/:provider", (req, res) => {
-  const provider = getOAuthProvider(req.params.provider);
-  if (!provider) {
-    res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_unavailable`);
-    return;
-  }
-  res.redirect(provider.getAuthorizationUrl(signOAuthState()));
-});
+authRoutes.get(
+  "/oauth/:provider",
+  asyncHandler(async (req, res) => {
+    const provider = getOAuthProvider(req.params.provider);
+    if (!provider) {
+      res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_unavailable`);
+      return;
+    }
+
+    let codeVerifier: string | undefined;
+    let codeChallenge: string | undefined;
+    if (provider.usesPKCE) {
+      codeVerifier = openidClient.randomPKCECodeVerifier();
+      codeChallenge = await openidClient.calculatePKCECodeChallenge(codeVerifier);
+    }
+
+    const state = signOAuthState(codeVerifier);
+    const authorizationUrl = await provider.getAuthorizationUrl({ state, codeChallenge });
+    res.redirect(authorizationUrl);
+  }),
+);
 
 authRoutes.get(
   "/oauth/:provider/callback",
@@ -159,15 +173,17 @@ authRoutes.get(
       return;
     }
 
+    let codeVerifier: string | undefined;
     try {
-      verifyOAuthState(state);
+      ({ codeVerifier } = verifyOAuthState(state));
     } catch {
       res.redirect(`${env.WEB_ORIGIN}/login?error=oauth_invalid_state`);
       return;
     }
 
     try {
-      const profile = await provider.exchangeCodeForProfile(code);
+      const callbackUrl = new URL(req.originalUrl, env.API_PUBLIC_URL);
+      const profile = await provider.exchangeCodeForProfile({ code, state, callbackUrl, codeVerifier });
       const tokens = await loginOrCreateOAuthUser(provider.id, profile);
       const fragment = `accessToken=${encodeURIComponent(tokens.accessToken)}&refreshToken=${encodeURIComponent(tokens.refreshToken)}`;
       res.redirect(`${env.WEB_ORIGIN}/oauth/callback#${fragment}`);

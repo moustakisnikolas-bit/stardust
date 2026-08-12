@@ -1,4 +1,4 @@
-import type { OAuthProfile, OAuthProvider } from "./OAuthProvider.js";
+import type { OAuthCallbackContext, OAuthProfile, OAuthProvider } from "./OAuthProvider.js";
 
 const AUTH_URL = "https://www.facebook.com/v19.0/dialog/oauth";
 const TOKEN_URL = "https://graph.facebook.com/v19.0/oauth/access_token";
@@ -16,6 +16,7 @@ interface FacebookUserInfo {
 
 export class FacebookOAuthProvider implements OAuthProvider {
   readonly id = "facebook" as const;
+  readonly usesPKCE = false;
 
   constructor(
     private readonly clientId: string,
@@ -23,7 +24,7 @@ export class FacebookOAuthProvider implements OAuthProvider {
     private readonly redirectUri: string,
   ) {}
 
-  getAuthorizationUrl(state: string): string {
+  getAuthorizationUrl({ state }: { state: string }): string {
     const url = new URL(AUTH_URL);
     url.searchParams.set("client_id", this.clientId);
     url.searchParams.set("redirect_uri", this.redirectUri);
@@ -32,7 +33,7 @@ export class FacebookOAuthProvider implements OAuthProvider {
     return url.toString();
   }
 
-  async exchangeCodeForProfile(code: string): Promise<OAuthProfile> {
+  async exchangeCodeForProfile({ code }: OAuthCallbackContext): Promise<OAuthProfile> {
     const tokenUrl = new URL(TOKEN_URL);
     tokenUrl.searchParams.set("client_id", this.clientId);
     tokenUrl.searchParams.set("client_secret", this.clientSecret);
