@@ -1,17 +1,17 @@
 # Phase 5 — Astrology provider validation (Prokerala / FreeAstrologyAPI / etc.)
 
-**Status:** ⛔ Third-party API adapters still blocked on you (see below) — but
-see "No-signup cross-validation" first: a real accuracy check against the
-authoritative Swiss Ephemeris is already done, and it's good news.
+**Status:** ✅ Prokerala live and cross-validated against real credentials.
+FreeAstrologyAPI still blocked (see below) - not required, Prokerala alone
+already delivers the validation this phase was for.
 
 ## No-signup cross-validation against the real Swiss Ephemeris
 
-The user asked whether a verified open-source option exists that doesn't
-need any signup. Found one: [`sweph`](https://www.npmjs.com/package/sweph),
-an actively maintained (published within the last two months at time of
-writing) Node binding for the actual Swiss Ephemeris C library - installs
-cleanly on Windows via prebuilt binaries, no node-gyp compilation needed
-(unlike the native `swisseph` package avoided in Phase 1).
+Before any third-party credentials existed, the user asked whether a
+verified open-source option exists that doesn't need any signup. Found one:
+[`sweph`](https://www.npmjs.com/package/sweph), an actively maintained Node
+binding for the actual Swiss Ephemeris C library - installs cleanly on
+Windows via prebuilt binaries, no node-gyp compilation needed (unlike the
+native `swisseph` package avoided in Phase 1).
 
 **Used it once, locally, purely to validate our numbers - not integrated
 into the app.** Downloaded the real high-precision ephemeris data files
@@ -23,83 +23,98 @@ Moshier algorithm) to within **32 arcseconds** - the Moon had the largest
 gap, still over 300x smaller than the tightest orb (6°) used anywhere in
 `scoreSynastry`. For every practical astrological purpose, our existing
 self-hosted provider is indistinguishable from the authoritative
-high-precision ephemeris. This is real, independent confirmation that the
-core chart math has been correct since Phase 1.
+high-precision ephemeris.
 
-**Why `sweph` isn't being adopted as a live provider despite this**:
-licensing, not accuracy. It's AGPL-3.0 by default (LGPL only if you
-purchase a professional Swiss Ephemeris license from Astrodienst/astro.com)
-- since Stardust's backend is a network-accessed service, AGPL's
-network-use clause would very likely require publishing the backend's full
-source to all users unless that commercial license is bought. This is a
-fundamentally different situation from `circular-natal-horoscope-js`
-(Unlicense - public domain, zero restrictions), which is exactly why that
-one was chosen in Phase 1 over the native `swisseph` bindings. Using
-`sweph` once, locally, to cross-check numbers doesn't trigger AGPL's
-network clause (nothing was conveyed or served to any user) - but shipping
-it as part of the running service would. If real Swiss Ephemeris precision
-ever becomes worth the AGPL/commercial-license tradeoff (e.g. for very
-old/future birth dates where Moshier's approximation degrades, which is
-not a concern for the 20th/21st century date range real users will have),
-that's a deliberate call to make later, not now.
+**Why `sweph` isn't a live provider despite this**: licensing, not accuracy.
+It's AGPL-3.0 by default (LGPL only with a purchased professional Swiss
+Ephemeris license from Astrodienst/astro.com) - since Stardust's backend is
+a network-accessed service, AGPL's network-use clause would very likely
+require publishing the backend's full source to all users unless that
+commercial license is bought. `circular-natal-horoscope-js` (Unlicense -
+public domain) has no such issue, which is why it remains the shipped
+provider. Using `sweph` once, locally, to cross-check numbers doesn't
+trigger AGPL's network clause; shipping it in the running service would.
 
-## Third-party API adapters (Prokerala / FreeAstrologyAPI)
+## Prokerala - live, real credentials, real verification
 
-## What this phase is
+You created a Prokerala API client and provided the Client ID/Secret. Used
+them immediately to reverse-engineer the real API (rather than guess, same
+principle as everything else in this project) before writing any adapter
+code:
 
-Per the original plan, this validates whether third-party astrology APIs
-agree with the self-hosted Swiss Ephemeris provider (and each other) across
-different countries/regions, using `compare-providers.ts` (already built in
-Phase 1) plus new provider adapters behind the existing `AstrologyProvider`
-interface (`packages/astrology-core/src/providers/`).
+- **Token endpoint**: `POST https://api.prokerala.com/token`,
+  `grant_type=client_credentials` - confirmed working, returns a Bearer
+  token (1hr expiry, cached and refreshed a minute early by
+  `ProkeralaProvider`).
+- **First finding**: Prokerala's `/v2/astrology/planet-position` endpoint
+  is sidereal/Vedic-only (rejects `ayanamsa=0`, the tropical setting -
+  "Allowed values are 1, 3, 5 & 45"). Not usable for this app's tropical
+  Western astrology.
+- **Second finding**: `/v2/astrology/natal-planet-position` *does* support
+  tropical (no ayanamsa parameter at all) and returns a complete chart:
+  houses, planets (+ Chiron/Lilith/Lunar Nodes, which we filter out - not
+  in our `ChartBody` set), angles (Ascendant/Nadir/Descendant/MC), and
+  aspects/declinations we don't need since `scoreSynastry` computes its own.
+- **Third finding, a real constraint**: this sandbox/free-tier key only
+  accepts **January 1st** as the date (any year, any time) -
+  `"In sandbox mode, only January 1st is allowed"`. Verification below
+  used `1990-01-01` instead of the Phase 1 fixture's `1990-06-15` for this
+  reason. Worth knowing before relying on this key for anything beyond
+  validation - a paid/verified plan would presumably lift this.
 
-## Why it's blocked, specifically
+`ProkeralaProvider` (`packages/astrology-core/src/providers/ProkeralaProvider.ts`)
+implements the standard `AstrologyProvider` interface against this verified
+shape, registered conditionally in `providerRegistry.ts` exactly like the
+OAuth providers (present only when `PROKERALA_CLIENT_ID`/`SECRET` are set).
 
-I attempted to start on `ProkeralaProvider`/`FreeAstrologyApiProvider`
-adapters and hit two real blockers, the same shape as the OAuth phase:
+### Verification result
 
-1. **No API credentials** - both providers require a registered
-   app/API key to call anything, same as Google/Facebook did.
-2. **Couldn't verify the exact request/response schema.** I looked up
-   FreeAstrologyAPI's docs and confirmed the auth header (`x-api-key`) and
-   base URL (`https://json.freeastrologyapi.com/`), but the exact endpoint
-   path and field names for a natal chart request/response weren't
-   reliably available without either an API key (some docs pages 403
-   without one) or a Postman collection I don't have access to.
+Ran `compare-providers.ts` for real (Jan 1 1990, 14:30, Athens) against
+both registered providers:
 
-Unlike the Swiss Ephemeris integration in Phase 1 - where I downloaded the
-actual npm package and ran real calculations locally to confirm the exact
-output shape before writing `SwissEphemerisProvider` - I have no way to run
-a real request against Prokerala or FreeAstrologyAPI to verify field names.
-Writing an adapter against guessed field names is worse than not writing it:
-it would look complete, silently misparse real responses, and produce wrong
-astrology data with no obvious failure signal.
+```
+Body        swiss-ephemeris          prokerala
+Sun         Capricorn 10.83°         Capricorn 10.84°
+Moon        Pisces 3.54°             Pisces 3.55°
+Mercury     Capricorn 25.67°         Capricorn 25.67°
+Venus       Aquarius 6.22°           Aquarius 6.22°
+Mars        Sagittarius 10.01°       Sagittarius 10.01°
+Jupiter     Cancer 5.15°             Cancer 5.15°
+Saturn      Capricorn 15.66°         Capricorn 15.66°
+Uranus      Capricorn 5.79°          Capricorn 5.79°
+Neptune     Capricorn 12.04°         Capricorn 12.04°
+Pluto       Scorpio 17.09°           Scorpio 17.09°
+Ascendant   Gemini 1.12°             Gemini 1.13°
+MC          Aquarius 9.69°           Aquarius 9.69°
+```
 
-## What's needed from you to unblock this
+**Zero sign divergences, degree differences all ≤0.01°.** Two
+independently-built systems - our self-hosted Moshier calculation and a
+real third-party commercial API - agree almost exactly. Combined with the
+`sweph` cross-check above, the core chart math now has three independent
+confirmations. All four runs (including one deliberate failure while
+debugging the timezone requirement) logged to `AstrologyProviderRun` for
+audit.
 
-Pick at least one:
-- **API credentials** for whichever provider(s) you want validated
-  (Prokerala: client ID + secret; FreeAstrologyAPI: an API key), so I can
-  make real requests and build the adapter against actual responses (same
-  approach as Phase 1's Swiss Ephemeris work).
-- Or your own real birth data (as you originally mentioned) plus which
-  provider(s) matter most to you / which countries' accuracy you care
-  about most - that'll tell me where to prioritize once credentials exist.
+`compare-providers.ts` gained a `--tz` override / auto-resolve-via-`geo-tz`
+default in the process, since `ProkeralaProvider` needs an explicit IANA
+zone (Swiss Ephemeris derives it internally, so this requirement didn't
+exist before Prokerala).
 
-## What's already in place, ready to receive the adapters
+### Not done
 
-- `AstrologyProvider` interface, `providerRegistry.ts` (config-driven
-  selection, already supports per-country overrides via
-  `ASTROLOGY_PROVIDER_BY_COUNTRY`).
-- `apps/api/scripts/compare-providers.ts` - already iterates
-  `listProviders()`, so a new provider registered in `providerRegistry.ts`
-  is automatically included in the comparison CLI with zero changes to the
-  script itself.
-- `AstrologyProviderRun` table - already logs every comparison run for
-  later review.
-
-Once credentials are available, adding a provider is: one new class
-implementing `AstrologyProvider` (mirroring `SwissEphemerisProvider.ts`'s
-shape), registered conditionally in `providerRegistry.ts` (same
-"only-register-if-configured" pattern used for Google/Facebook OAuth), plus
-env vars in `.env.example`. No changes needed anywhere else.
+- **`ASTROLOGY_PROVIDER_BY_COUNTRY`** isn't populated yet - would need
+  comparison runs across multiple real regions/dates to have a basis for
+  per-country overrides, and the sandbox key's Jan-1-only restriction makes
+  that impractical right now. Swiss Ephemeris remains the default for
+  everyone; Prokerala is registered and available but not selected anywhere
+  yet.
+- **No automated test** for `ProkeralaProvider` in the standard vitest
+  suite - it needs live credentials and network access (and would burn
+  free-tier request budget on every CI run), unlike `SwissEphemerisProvider`
+  which is fully self-hosted. The manual `compare-providers.ts` run above
+  is the verification record for this provider.
+- **FreeAstrologyAPI** still unbuilt - not needed right now since Prokerala
+  already provides the cross-validation this phase was for, but the same
+  "no guessing field names" approach applies if you want it added later:
+  send credentials and I'll verify the real API before writing code.

@@ -10,5 +10,5 @@ for day-to-day dev setup; this folder is the durable build history.
 | 2 | [Matching](./02-matching.md) — synastry scoring, swipe deck, matches | ✅ Done |
 | 3 | [Chat](./03-chat.md) — Socket.IO real-time messaging | ✅ Done |
 | 4 | [Google & Facebook sign-in](./04-oauth.md) — OAuth signup/login | ✅ Code done, needs your app credentials |
-| 5 | [Provider validation](./05-provider-validation.md) — third-party astrology APIs, per-region comparison | 🟡 Core accuracy independently verified (no signup needed); third-party API adapters still blocked on your credentials |
+| 5 | [Provider validation](./05-provider-validation.md) — third-party astrology APIs, per-region comparison | ✅ Prokerala live, cross-validated against real credentials (zero sign divergences) |
 | 6 | [Polish](./06-polish.md) — rate limiting, refresh-token rotation, photo upload, push notifications | 🚧 In progress |

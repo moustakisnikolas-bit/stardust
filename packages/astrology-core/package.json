@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@stardust/shared-types": "workspace:*",
-    "circular-natal-horoscope-js": "^1.1.0"
+    "circular-natal-horoscope-js": "^1.1.0",
+    "luxon": "^3.5.0"
   },
   "devDependencies": {
+    "@types/luxon": "^3.4.2",
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"

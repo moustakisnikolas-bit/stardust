@@ -1,5 +1,6 @@
 import type { AstrologyProvider } from "./AstrologyProvider.js";
 import { SwissEphemerisProvider } from "./SwissEphemerisProvider.js";
+import { ProkeralaProvider } from "./ProkeralaProvider.js";
 
 const providers = new Map<string, AstrologyProvider>();
 
@@ -8,9 +9,13 @@ function register(provider: AstrologyProvider): void {
 }
 
 register(new SwissEphemerisProvider());
-// Phase 4 adds more providers here (Prokerala, FreeAstrologyAPI, ...) behind
-// the same AstrologyProvider interface, once API keys are available to test
-// them against real birth data via scripts/compare-providers.ts.
+
+// Only registered when credentials are configured, so an unconfigured
+// third-party provider is simply absent from listProviders() rather than
+// crashing startup - same pattern used for OAuth providers in apps/api.
+if (process.env.PROKERALA_CLIENT_ID && process.env.PROKERALA_CLIENT_SECRET) {
+  register(new ProkeralaProvider(process.env.PROKERALA_CLIENT_ID, process.env.PROKERALA_CLIENT_SECRET));
+}
 
 export function getProvider(id: string): AstrologyProvider {
   const provider = providers.get(id);

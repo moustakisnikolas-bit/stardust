@@ -11,6 +11,7 @@
  */
 import "../src/lib/loadEnv.js";
 
+import { find as findTimeZones } from "geo-tz";
 import { listProviders, type BirthInput } from "@stardust/astrology-core";
 import { prisma } from "../src/lib/prisma.js";
 
@@ -30,14 +31,21 @@ function parseArgs(): BirthInput {
     }
   }
 
+  const latitude = Number(args.lat);
+  const longitude = Number(args.lon);
+  // Auto-resolved the same way onboardingService.ts does, unless --tz overrides it -
+  // needed for providers (e.g. Prokerala) that require an explicit IANA zone.
+  const timezoneId = args.tz ?? findTimeZones(latitude, longitude)[0];
+
   return {
     year: Number(args.year),
     month: Number(args.month),
     day: Number(args.day),
     hour: Number(args.hour),
     minute: Number(args.minute),
-    latitude: Number(args.lat),
-    longitude: Number(args.lon),
+    latitude,
+    longitude,
+    timezoneId,
   };
 }
 
