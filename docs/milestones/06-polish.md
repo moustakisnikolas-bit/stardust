@@ -5,6 +5,43 @@ editing, photo upload, and web push notifications built and verified as far
 as this environment allows (see the push notifications section for the one
 piece that needs testing in a real Chrome install).
 
+## Starfield background
+
+Global animated starfield (`apps/web/src/components/effects/Starfield.tsx`),
+applied once in the root layout so it's behind every page. Deliberately no
+`<canvas>` and no `requestAnimationFrame` loop - everything is CSS
+animation running on the compositor thread (near-zero CPU/battery cost,
+important since this needs to stay cheap on mobile browsers per the user's
+"lightweight" requirement):
+
+- Two "dust" layers, each a single element with hundreds of `box-shadow`
+  dots (one paint operation, not one DOM node per star), drifting slowly
+  at different speeds via `transform` (GPU-accelerated) for parallax.
+- ~20 individually-positioned twinkling stars with staggered CSS opacity
+  animations.
+- An occasional shooting star, re-triggered on a random interval by
+  toggling a class on a single reused element (no DOM churn).
+- Star positions are generated with a seeded PRNG (`mulberry32`), not
+  `Math.random()` - this component server-renders too (Next.js SSRs
+  Client Components on first load), so positions must be identical
+  between server and client or React throws a hydration mismatch.
+- Respects `prefers-reduced-motion` - animations disabled entirely for
+  users who've set that preference (accessibility, and it happens to save
+  battery too).
+
+**On "mobile app" scope**: the user confirmed no separate mobile app
+exists yet or is being built now - just keep the web app's general
+structure migration-friendly for when one eventually shares the same
+backend/DB. This CSS-based starfield won't port directly to a future
+React Native app (RN doesn't have CSS/DOM), but the *design* - lightweight
+dot layers + sparse twinkle + occasional shooting star, no continuous JS
+render loop - is the right reference to reimplement against (e.g. with
+`react-native-reanimated` or a native particle view) when that day comes.
+
+Verified in a real headless browser at both desktop and mobile (390×844)
+viewport sizes, including a 9-second wait to confirm the shooting-star
+timer fires without errors. Zero console errors either time.
+
 ## Refresh-token rotation with reuse detection
 
 Previously `/api/auth/refresh` just re-verified the same long-lived (30-day)

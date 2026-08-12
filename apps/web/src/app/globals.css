@@ -7,3 +7,87 @@ body {
   color: #f4f0ff;
   min-height: 100vh;
 }
+
+/*
+ * Starfield background (components/effects/Starfield.tsx).
+ * Deliberately no canvas / no requestAnimationFrame loop - everything here
+ * is a CSS animation running on the compositor thread, which is far
+ * cheaper on battery/CPU than a per-frame JS redraw, especially on mobile
+ * browsers. The two dust layers are each a single element with hundreds of
+ * box-shadow dots (one paint op, not one DOM node per star).
+ */
+.stardust-field {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stardust-drift-slow {
+  animation: stardust-drift 240s linear infinite;
+}
+
+.stardust-drift-fast {
+  animation: stardust-drift 140s linear infinite reverse;
+}
+
+@keyframes stardust-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-500px, -500px, 0);
+  }
+}
+
+.stardust-twinkle {
+  animation-name: stardust-twinkle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes stardust-twinkle {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.stardust-shooting-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: linear-gradient(90deg, #f4f0ff, rgba(244, 240, 255, 0));
+  border-radius: 999px;
+  opacity: 0;
+}
+
+.stardust-shooting-star.stardust-shoot {
+  animation: stardust-shoot 1.1s ease-out;
+}
+
+@keyframes stardust-shoot {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scaleX(1);
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(220px, 140px, 0) scaleX(20);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stardust-drift-slow,
+  .stardust-drift-fast,
+  .stardust-twinkle,
+  .stardust-shooting-star.stardust-shoot {
+    animation: none !important;
+  }
+}
