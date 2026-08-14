@@ -6,12 +6,16 @@
  * without touching real accounts.
  *
  * Usage (API dev server must already be running):
- *   npx tsx scripts/test-profiles.ts create   # creates the 5 profiles below
- *   npx tsx scripts/test-profiles.ts list      # shows which test profiles currently exist
- *   npx tsx scripts/test-profiles.ts delete    # deletes every user under TEST_DOMAIN
+ *   npx tsx scripts/test-profiles.ts create              # creates the 5 fixed profiles below
+ *   npx tsx scripts/test-profiles.ts compatible <email>   # searches for + creates 5 high-scoring profiles against a real account's chart
+ *   npx tsx scripts/test-profiles.ts list                 # shows which test profiles currently exist
+ *   npx tsx scripts/test-profiles.ts delete               # deletes every user under TEST_DOMAIN
  */
 import "../src/lib/loadEnv.js";
+import { resolveProvider, scoreSynastry } from "@stardust/astrology-core";
+import type { RelationshipIntent } from "@stardust/shared-types";
 import { prisma } from "../src/lib/prisma.js";
+import { toNatalChart } from "../src/modules/matching/chartMapper.js";
 
 const BASE = `http://localhost:${process.env.PORT ?? 4000}`;
 const TEST_DOMAIN = "stardust-test.local";
@@ -152,6 +156,115 @@ async function list() {
   }
 }
 
+function randomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+interface CompatibleWinner {
+  score: number;
+  birthDate: string;
+  birthTime: string;
+}
+
+/**
+ * Samples random Athens-born birth moments, scores each against the target
+ * chart with the same neutral (unweighted) scoreSynastry used for deck
+ * filtering, and keeps the top `count`. Uses the same provider call
+ * (resolveProvider + raw year/month/day/hour/minute) that onboardingService
+ * uses, so a winner's score here is reproduced exactly once it's actually
+ * onboarded through the real API below - not an approximation.
+ */
+async function findCompatibleBirths(targetChart: Parameters<typeof scoreSynastry>[0], count: number, sampleSize: number) {
+  const provider = resolveProvider();
+  const results: CompatibleWinner[] = [];
+
+  for (let i = 0; i < sampleSize; i++) {
+    const year = randomInt(1985, 2001);
+    const month = randomInt(1, 12);
+    const day = randomInt(1, 28);
+    const hour = randomInt(0, 23);
+    const minute = randomInt(0, 59);
+
+    const chart = await provider.getNatalChart({
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      latitude: ATHENS.lat,
+      longitude: ATHENS.lon,
+      timezoneId: "Europe/Athens",
+    });
+    const { score } = scoreSynastry(targetChart, chart);
+    results.push({ score, birthDate: `${year}-${pad(month)}-${pad(day)}`, birthTime: `${pad(hour)}:${pad(minute)}` });
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, count);
+}
+
+const COMPATIBLE_NAMES = ["Aria", "Vera", "Maya", "Zara", "Nadia"];
+const COMPATIBLE_INTENTS: (RelationshipIntent | null)[] = ["life_partner", "long_term", "passionate", "casual", null];
+const COMPATIBLE_BIOS = [
+  "Here for the real thing, chart says you're worth the scroll.",
+  "Slow and steady - Saturn doesn't rush, neither do I.",
+  "Venus in a good mood lately. Let's find out why.",
+  "Not overthinking this one - just here to see what happens.",
+  "Not sure what I'm looking for yet, figured the stars might know first.",
+];
+
+async function createCompatible(targetEmail: string) {
+  const targetUser = await prisma.user.findUnique({ where: { email: targetEmail }, include: { natalChart: true } });
+  if (!targetUser?.natalChart) {
+    throw new Error(`No onboarded user found for "${targetEmail}" - check the email and that onboarding is complete.`);
+  }
+  const targetChart = toNatalChart(targetUser.natalChart);
+
+  const sampleSize = 500;
+  console.log(`Sampling ${sampleSize} candidate charts against ${targetEmail}'s real chart ...`);
+  const winners = await findCompatibleBirths(targetChart, COMPATIBLE_NAMES.length, sampleSize);
+
+  console.log(`Creating ${winners.length} compatible profiles under @${TEST_DOMAIN} ...`);
+  for (let i = 0; i < winners.length; i++) {
+    const w = winners[i];
+    const email = emailFor(COMPATIBLE_NAMES[i].toLowerCase());
+    const signup = await api("/api/auth/signup", { method: "POST", body: { email, password: TEST_PASSWORD } });
+    const token = signup.tokens.accessToken as string;
+
+    await api("/api/onboarding/birth-data", {
+      method: "POST",
+      token,
+      body: {
+        birthDate: w.birthDate,
+        birthTime: w.birthTime,
+        timeUnknown: false,
+        birthLocationRaw: "Athens, Greece",
+        latitude: ATHENS.lat,
+        longitude: ATHENS.lon,
+      },
+    });
+
+    await api("/api/users/me", {
+      method: "PUT",
+      token,
+      body: {
+        displayName: COMPATIBLE_NAMES[i],
+        bio: COMPATIBLE_BIOS[i],
+        gender: "woman",
+        genderPreference: null,
+        relationshipIntent: COMPATIBLE_INTENTS[i],
+      },
+    });
+
+    console.log(`  created ${email} (${COMPATIBLE_NAMES[i]}) - score ${w.score} vs ${targetEmail}`);
+  }
+
+  console.log(`\nAll set. Log in as ${targetEmail} and check your deck - these 5 should be near the top.`);
+}
+
 async function del() {
   const result = await prisma.user.deleteMany({ where: { email: { endsWith: `@${TEST_DOMAIN}` } } });
   console.log(`Deleted ${result.count} test profile(s) under @${TEST_DOMAIN} (cascades: birth data, chart, photos, swipes, matches, messages, subscription).`);
@@ -160,10 +273,17 @@ async function del() {
 async function main() {
   const cmd = process.argv[2];
   if (cmd === "create") await create();
-  else if (cmd === "list") await list();
+  else if (cmd === "compatible") {
+    const email = process.argv[3];
+    if (!email) {
+      console.error("Usage: npx tsx scripts/test-profiles.ts compatible <target-email>");
+      process.exit(1);
+    }
+    await createCompatible(email);
+  } else if (cmd === "list") await list();
   else if (cmd === "delete") await del();
   else {
-    console.error("Usage: npx tsx scripts/test-profiles.ts <create|list|delete>");
+    console.error("Usage: npx tsx scripts/test-profiles.ts <create|compatible <email>|list|delete>");
     process.exit(1);
   }
   await prisma.$disconnect();
