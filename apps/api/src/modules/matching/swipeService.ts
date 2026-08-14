@@ -1,10 +1,12 @@
-import type { SwipeDirection, SwipeResult } from "@stardust/shared-types";
+import type { RewindResult, SwipeDirection, SwipeResult } from "@stardust/shared-types";
 import { prisma } from "../../lib/prisma.js";
 import { HttpError } from "../../middleware/errorHandler.js";
+import { env } from "../../config/env.js";
 import { orderPair } from "./pairOrdering.js";
 import { getIo } from "../../ws/ioRegistry.js";
 import { userRoom } from "../../ws/rooms.js";
 import { sendPushToUser } from "../push/pushService.js";
+import { isPaidUser } from "../billing/entitlementService.js";
 
 export async function recordSwipe(swiperId: string, swipeeId: string, direction: SwipeDirection): Promise<SwipeResult> {
   if (swiperId === swipeeId) {
@@ -14,6 +16,19 @@ export async function recordSwipe(swiperId: string, swipeeId: string, direction:
   const swipee = await prisma.user.findUnique({ where: { id: swipeeId }, select: { id: true } });
   if (!swipee) {
     throw new HttpError(404, "CANDIDATE_NOT_FOUND", "That user does not exist");
+  }
+
+  const paid = await isPaidUser(swiperId);
+  if (!paid) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const swipesToday = await prisma.swipe.count({ where: { swiperId, createdAt: { gte: since } } });
+    if (swipesToday >= env.FREE_DAILY_SWIPE_LIMIT) {
+      throw new HttpError(
+        402,
+        "UPGRADE_REQUIRED",
+        `You've hit today's free swipe limit (${env.FREE_DAILY_SWIPE_LIMIT}). Upgrade to Stardust Plus for unlimited swipes.`,
+      );
+    }
   }
 
   const { userAId, userBId } = orderPair(swiperId, swipeeId);
@@ -68,4 +83,23 @@ export async function recordSwipe(swiperId: string, swipeeId: string, direction:
   }
 
   return result;
+}
+
+/**
+ * Stardust Plus only (paid-gated at the route). Restricted to the most
+ * recent PASS swipe - a PASS can never have created a Match, so this avoids
+ * the awkward "undo a Match" case entirely and needs no extra checks.
+ */
+export async function rewindLastSwipe(userId: string): Promise<RewindResult> {
+  const lastPass = await prisma.swipe.findFirst({
+    where: { swiperId: userId, direction: "PASS" },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!lastPass) {
+    return { rewound: false, candidateUserId: null };
+  }
+
+  await prisma.swipe.delete({ where: { id: lastPass.id } });
+  return { rewound: true, candidateUserId: lastPass.swipeeId };
 }

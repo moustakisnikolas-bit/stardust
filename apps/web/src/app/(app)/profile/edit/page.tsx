@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   GENDER_OPTIONS,
   GENDER_PREFERENCE_OPTIONS,
+  RELATIONSHIP_INTENT_OPTIONS,
   type MyProfile,
   type PhotoDto,
 } from "@stardust/shared-types";
@@ -14,6 +15,12 @@ import { apiRequest, apiUpload, ApiError } from "@/lib/apiClient";
 import { NotificationToggle } from "@/components/settings/NotificationToggle";
 
 const GENDER_LABELS: Record<string, string> = { woman: "Woman", man: "Man", nonbinary: "Non-binary", any: "Anyone" };
+const INTENT_LABELS: Record<string, string> = {
+  casual: "Casual",
+  passionate: "Passionate",
+  long_term: "Long-term",
+  life_partner: "Life partner",
+};
 
 export default function EditProfilePage() {
   const { loading } = useRequireAuth({ requireOnboarding: true });
@@ -24,6 +31,7 @@ export default function EditProfilePage() {
   const [bio, setBio] = useState("");
   const [gender, setGender] = useState<string>("");
   const [genderPreference, setGenderPreference] = useState<string>("");
+  const [relationshipIntent, setRelationshipIntent] = useState<string>("");
 
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -40,6 +48,7 @@ export default function EditProfilePage() {
         setBio(profile.bio ?? "");
         setGender(profile.gender ?? "");
         setGenderPreference(profile.genderPreference ?? "");
+        setRelationshipIntent(profile.relationshipIntent ?? "");
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load profile"));
   }, [accessToken]);
@@ -58,6 +67,7 @@ export default function EditProfilePage() {
           bio: bio.trim() || null,
           gender: gender || null,
           genderPreference: genderPreference || null,
+          relationshipIntent: relationshipIntent || null,
         },
       });
       setProfile(updated);
@@ -213,6 +223,32 @@ export default function EditProfilePage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm text-stardust-200" htmlFor="relationshipIntent">
+              Looking for
+            </label>
+            <select
+              id="relationshipIntent"
+              value={relationshipIntent}
+              onChange={(e) => setRelationshipIntent(e.target.value)}
+              className="w-full rounded-lg border border-stardust-600/50 bg-stardust-950 px-3 py-2 text-stardust-100 outline-none focus:border-stardust-400"
+            >
+              <option value="">Not sure yet</option>
+              {RELATIONSHIP_INTENT_OPTIONS.map((intent) => (
+                <option key={intent} value={intent}>
+                  {INTENT_LABELS[intent]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-stardust-400">
+              Stardust Plus weighs your matches&apos; charts differently based on this - see{" "}
+              <Link href="/plus" className="underline hover:text-stardust-200">
+                Stardust Plus
+              </Link>
+              .
+            </p>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}

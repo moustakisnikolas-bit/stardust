@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { SynastryHighlight } from "./chart";
+import type { SynastryAspect, SynastryHighlight } from "./chart";
 
 export type SwipeDirection = "LIKE" | "PASS";
 
@@ -10,6 +10,10 @@ export interface CandidateProfile {
   photoUrls: string[];
   compatibilityScore: number;
   highlights: SynastryHighlight[];
+  /** Stardust Plus only: every detected aspect, not just the top highlights. Undefined for free users. */
+  allAspects?: SynastryAspect[];
+  /** Stardust Plus only: both users share the same relationshipIntent. Undefined for free users. */
+  bothWantSameIntent?: boolean;
 }
 
 export interface MatchSummary {
@@ -38,4 +42,17 @@ export interface SwipeResult {
 export interface DeckResponse {
   candidates: CandidateProfile[];
   nextCursor: string | null;
+}
+
+export interface RewindResult {
+  rewound: boolean;
+  candidateUserId: string | null;
+}
+
+export interface IncomingLike {
+  userId: string;
+  displayName: string | null;
+  photoUrls: string[];
+  compatibilityScore: number;
+  createdAt: string;
 }

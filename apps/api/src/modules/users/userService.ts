@@ -12,6 +12,7 @@ function toMyProfile(user: {
   bio: string | null;
   gender: string | null;
   genderPreference: string | null;
+  relationshipIntent: string | null;
   photos: { id: string; url: string; position: number }[];
 }): MyProfile {
   return {
@@ -21,6 +22,7 @@ function toMyProfile(user: {
     bio: user.bio,
     gender: user.gender as MyProfile["gender"],
     genderPreference: user.genderPreference as MyProfile["genderPreference"],
+    relationshipIntent: user.relationshipIntent as MyProfile["relationshipIntent"],
     photos: user.photos,
   };
 }

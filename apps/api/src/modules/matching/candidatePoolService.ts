@@ -1,7 +1,8 @@
-import type { CandidateProfile } from "@stardust/shared-types";
+import type { CandidateProfile, RelationshipIntent } from "@stardust/shared-types";
 import { prisma } from "../../lib/prisma.js";
 import { env } from "../../config/env.js";
 import { getOrComputeCompatibility, resolveSynastryPerspective } from "./compatibilityService.js";
+import { isPaidUser } from "../billing/entitlementService.js";
 import type { NatalChartRow } from "./chartMapper.js";
 
 const DECK_SCAN_BATCH = 50;
@@ -22,6 +23,14 @@ export async function getCandidateDeck(userId: string, opts: { cursor?: string |
     throw new Error(`User ${userId} has no natal chart - onboarding incomplete`);
   }
   const requesterChart: NatalChartRow = requester.natalChart;
+  const requesterIntent = requester.relationshipIntent as RelationshipIntent | null;
+
+  const paid = await isPaidUser(userId);
+  // Paid users see a wider pool (lower bar) - "extra possibilities" is the
+  // whole point of the paid tier. Filtering always uses the neutral score
+  // (below) so this stays a single, consistent bar regardless of intent.
+  const threshold = paid ? env.MIN_COMPATIBILITY_SCORE_PAID : env.MIN_COMPATIBILITY_SCORE_FREE;
+  const now = new Date();
 
   const rows = await prisma.user.findMany({
     where: {
@@ -46,25 +55,57 @@ export async function getCandidateDeck(userId: string, opts: { cursor?: string |
 
   const scored = await Promise.all(
     rows.map(async (candidate) => {
-      const compat = await getOrComputeCompatibility(userId, candidate.id, {
+      // Filtering/sorting always uses the neutral (intent: null) score, kept
+      // simple and consistent for everyone regardless of tier or intent.
+      const neutral = await getOrComputeCompatibility(userId, candidate.id, {
         chartRow1: requesterChart,
         chartRow2: candidate.natalChart!,
       });
-      const { score, highlights } = resolveSynastryPerspective(compat, userId);
-      return { candidate, score, highlights };
+      const { score, highlights: neutralHighlights, aspects: neutralAspects } = resolveSynastryPerspective(neutral, userId);
+
+      let highlights = neutralHighlights as unknown as CandidateProfile["highlights"];
+      let allAspects: CandidateProfile["allAspects"];
+      let bothWantSameIntent: boolean | undefined;
+
+      if (paid) {
+        // Full breakdown is always available; the intent-weighted lens only
+        // when the paid viewer has actually set an intent.
+        if (requesterIntent) {
+          const intentScored = await getOrComputeCompatibility(userId, candidate.id, {
+            chartRow1: requesterChart,
+            chartRow2: candidate.natalChart!,
+            intent: requesterIntent,
+          });
+          const perspective = resolveSynastryPerspective(intentScored, userId);
+          highlights = perspective.highlights as unknown as CandidateProfile["highlights"];
+          allAspects = perspective.aspects as unknown as CandidateProfile["allAspects"];
+          bothWantSameIntent = candidate.relationshipIntent === requesterIntent;
+        } else {
+          allAspects = neutralAspects as unknown as CandidateProfile["allAspects"];
+        }
+      }
+
+      return { candidate, score, highlights, allAspects, bothWantSameIntent };
     }),
   );
 
   const candidates: CandidateProfile[] = scored
-    .filter(({ score }) => score >= env.MIN_COMPATIBILITY_SCORE)
-    .sort((a, b) => b.score - a.score)
-    .map(({ candidate, score, highlights }) => ({
+    .filter(({ score }) => score >= threshold)
+    .sort((a, b) => {
+      const aBoosted = !!a.candidate.boostedUntil && a.candidate.boostedUntil > now;
+      const bBoosted = !!b.candidate.boostedUntil && b.candidate.boostedUntil > now;
+      if (aBoosted !== bBoosted) return aBoosted ? -1 : 1;
+      return b.score - a.score;
+    })
+    .map(({ candidate, score, highlights, allAspects, bothWantSameIntent }) => ({
       userId: candidate.id,
       displayName: candidate.displayName,
       bio: candidate.bio,
       photoUrls: candidate.photos.map((p) => p.url),
       compatibilityScore: score,
-      highlights: highlights as unknown as CandidateProfile["highlights"],
+      highlights,
+      ...(allAspects ? { allAspects } : {}),
+      ...(bothWantSameIntent !== undefined ? { bothWantSameIntent } : {}),
     }));
 
   // Cursor tracks the last *scanned* row (not last-that-passed-filter) so

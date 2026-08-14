@@ -1,5 +1,17 @@
-import type { CandidateProfile } from "@stardust/shared-types";
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import type { AspectType, CandidateProfile } from "@stardust/shared-types";
 import { CompatibilityBadge } from "./CompatibilityBadge";
+
+const ASPECT_SYMBOLS: Record<AspectType, string> = {
+  conjunction: "☌",
+  sextile: "✶",
+  square: "□",
+  trine: "△",
+  opposition: "☍",
+};
 
 function initials(name: string | null): string {
   if (!name) return "?";
@@ -12,7 +24,9 @@ function initials(name: string | null): string {
 }
 
 export function SwipeCard({ candidate }: { candidate: CandidateProfile }) {
+  const [showAll, setShowAll] = useState(false);
   const photo = candidate.photoUrls[0];
+  const isPlus = candidate.allAspects !== undefined;
 
   return (
     <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-stardust-600/40 bg-stardust-900/60 shadow-2xl">
@@ -36,6 +50,12 @@ export function SwipeCard({ candidate }: { candidate: CandidateProfile }) {
           {candidate.bio && <p className="mt-1 text-sm text-stardust-400">{candidate.bio}</p>}
         </div>
 
+        {candidate.bothWantSameIntent && (
+          <p className="rounded-lg bg-stardust-400/10 px-3 py-1.5 text-xs font-medium text-stardust-200">
+            ✨ You&apos;re both looking for the same kind of connection
+          </p>
+        )}
+
         {candidate.highlights.length > 0 && (
           <ul className="flex flex-wrap gap-2">
             {candidate.highlights.slice(0, 3).map((h, i) => (
@@ -47,6 +67,36 @@ export function SwipeCard({ candidate }: { candidate: CandidateProfile }) {
               </li>
             ))}
           </ul>
+        )}
+
+        {isPlus ? (
+          candidate.allAspects && candidate.allAspects.length > 3 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className="text-xs font-medium text-stardust-400 underline hover:text-stardust-200"
+              >
+                {showAll ? "Hide full breakdown" : `See full breakdown (${candidate.allAspects.length} aspects)`}
+              </button>
+              {showAll && (
+                <ul className="mt-2 space-y-1">
+                  {candidate.allAspects.map((a, i) => (
+                    <li key={i} className="flex items-center justify-between text-xs text-stardust-400">
+                      <span>
+                        {a.bodyA} {ASPECT_SYMBOLS[a.aspectType]} {a.bodyB}
+                      </span>
+                      <span className="text-stardust-500">{a.aspectType}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )
+        ) : (
+          <Link href="/plus" className="block text-xs text-stardust-400 underline hover:text-stardust-200">
+            Unlock the full compatibility breakdown with Stardust Plus
+          </Link>
         )}
       </div>
     </div>

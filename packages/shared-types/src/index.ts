@@ -5,3 +5,4 @@ export * from "./matching";
 export * from "./chat";
 export * from "./user";
 export * from "./push";
+export * from "./billing";

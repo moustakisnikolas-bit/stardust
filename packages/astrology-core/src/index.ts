@@ -5,3 +5,4 @@ export * from "./providers/providerRegistry.js";
 export * from "./synastry/aspects.js";
 export * from "./synastry/aspectDescriptions.js";
 export * from "./synastry/scoreSynastry.js";
+export * from "./synastry/intentWeights.js";

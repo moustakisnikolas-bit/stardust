@@ -11,6 +11,8 @@ import { onboardingRoutes } from "./modules/onboarding/onboardingRoutes.js";
 import { matchingRoutes } from "./modules/matching/matchingRoutes.js";
 import { chatRoutes } from "./modules/chat/chatRoutes.js";
 import { userRoutes } from "./modules/users/userRoutes.js";
+import { billingRoutes } from "./modules/billing/billingRoutes.js";
+import { stripeWebhookHandler } from "./modules/billing/webhookHandler.js";
 import { UPLOADS_DIR } from "./modules/users/storage/LocalDiskStorage.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
@@ -21,6 +23,14 @@ const app = express();
 
 app.use(helmet());
 app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+
+// Stripe's signature verification needs the raw request body, so this must
+// be mounted with express.raw() BEFORE the global express.json() below -
+// once express.json() has parsed a request, the original bytes are gone.
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), (req, res) => {
+  void stripeWebhookHandler(req, res);
+});
+
 app.use(express.json());
 app.use("/api", apiLimiter);
 
@@ -43,6 +53,7 @@ app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/matching", matchingRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/billing", billingRoutes);
 
 app.use(errorHandler);
 

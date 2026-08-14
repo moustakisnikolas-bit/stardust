@@ -1,5 +1,6 @@
 import {
   SYNASTRY_BODIES,
+  type ChartBody,
   type NatalChart,
   type SynastryAspect,
   type SynastryHighlight,
@@ -17,7 +18,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function scoreSynastry(chartA: NatalChart, chartB: NatalChart): SynastryResult {
+export interface ScoreSynastryOptions {
+  /** Overrides BODY_SIGNIFICANCE - defaults to it when omitted. See intentWeights.ts for the relationship-intent profiles that use this. */
+  weights?: Record<ChartBody, number>;
+}
+
+export function scoreSynastry(chartA: NatalChart, chartB: NatalChart, opts: ScoreSynastryOptions = {}): SynastryResult {
+  const weights = opts.weights ?? BODY_SIGNIFICANCE;
   const placementsA = chartA.placements.filter((p) => (SYNASTRY_BODIES as readonly string[]).includes(p.body));
   const placementsB = chartB.placements.filter((p) => (SYNASTRY_BODIES as readonly string[]).includes(p.body));
 
@@ -31,7 +38,7 @@ export function scoreSynastry(chartA: NatalChart, chartB: NatalChart): SynastryR
       const match = findAspect(angle);
       if (!match) continue;
 
-      const significanceProduct = (BODY_SIGNIFICANCE[a.body] ?? 1) * (BODY_SIGNIFICANCE[b.body] ?? 1);
+      const significanceProduct = (weights[a.body] ?? 1) * (weights[b.body] ?? 1);
       const orbCloseness = 1 - match.orb / match.definition.orb;
       const weight = significanceProduct * orbCloseness;
 

@@ -18,6 +18,13 @@ model User {
   bio                    String?
   gender                 String?
   genderPreference       String?
+  /// What kind of connection this user is looking for: casual | passionate |
+  /// long_term | life_partner. Free to set - influences intent-weighted
+  /// synastry scoring (a Stardust Plus feature), not gated itself.
+  relationshipIntent     String?
+  /// Set by the paid-only "boost" action; while in the future, this user is
+  /// prioritized in other users' decks.
+  boostedUntil           DateTime?
   isActive               Boolean   @default(true)
   onboardingCompletedAt  DateTime?
   createdAt              DateTime  @default(now())
@@ -40,6 +47,23 @@ model User {
 
   refreshTokens    RefreshToken[]
   pushSubscriptions PushSubscription[]
+  subscription      Subscription?
+}
+
+/// Tracks a user's Stripe subscription status - the single source of truth
+/// entitlementService.isPaidUser() checks. Kept separate from User so
+/// billing concerns don't bloat the core user record.
+model Subscription {
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String
+  stripeSubscriptionId String?
+  /// active | trialing | past_due | canceled | incomplete (mirrors Stripe's subscription status values)
+  status               String
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 /// A browser's Web Push subscription (one per device/browser a user has
@@ -136,12 +160,21 @@ model AstrologyProviderRun {
 }
 
 /// Cached pairwise synastry result - what the swipe deck reads from.
+/// intent = "" (the neutral sentinel) is the default score used for deck
+/// filtering and shown to free users; a non-empty intent is an additional
+/// cached row for that specific relationship-intent weighting (Stardust
+/// Plus). Deliberately a non-null sentinel rather than NULL: Prisma's
+/// compound-unique lookup type rejects null for a key field, and Postgres
+/// doesn't enforce uniqueness across NULLs in a composite unique index
+/// anyway (each NULL is distinct), so NULL couldn't guarantee "exactly one
+/// neutral row per pair" the way this cache depends on.
 model CompatibilityScore {
   id              String   @id @default(uuid())
   userAId         String
   userBId         String
   userA           User     @relation("CompatUserA", fields: [userAId], references: [id], onDelete: Cascade)
   userB           User     @relation("CompatUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  intent          String   @default("")
 
   score           Int
   aspects         Json
@@ -150,7 +183,7 @@ model CompatibilityScore {
 
   computedAt      DateTime @default(now())
 
-  @@unique([userAId, userBId])
+  @@unique([userAId, userBId, intent])
   @@index([userBId])
 }
 
